@@ -3,7 +3,6 @@ require_once 'db_connect.php';
 $pegawai_list = mysqli_query($conn, "SELECT id_pegawai, nama FROM pegawai ORDER BY nama ASC");
 date_default_timezone_set('Asia/Jakarta');
 
-// Ambil tanggal dari filter jika ada, jika tidak kosongkan
 $filter_tgl = isset($_GET['filter_tgl']) ? $_GET['filter_tgl'] : '';
 
 function hitungDurasi($masuk, $keluar)
@@ -13,11 +12,9 @@ function hitungDurasi($masuk, $keluar)
     $awal = strtotime($masuk);
     $akhir = strtotime($keluar);
     $diff = $akhir - $awal;
-
     $jam = floor($diff / (60 * 60));
     $menit = floor(($diff - ($jam * 60 * 60)) / 60);
-
-    return "$jam Jam $menit Menit";
+    return "$jam j $menit m";
 }
 ?>
 
@@ -26,130 +23,160 @@ function hitungDurasi($masuk, $keluar)
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Absensi Pegawai - GojekStaff</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
     <?php include 'navbar.php'; ?>
 
-    <div class="content-pegawai">
-        <h2>Presensi Kehadiran Pegawai</h2>
-
-        <div class="filter-box" style="justify-content: space-between;">
-            <div>
-                <button class="btn-tambah" onclick="document.getElementById('modalAbsen').style.display='block'"
-                    style="margin-bottom:0">
-                    + Input Kehadiran Baru
-                </button>
+    <main class="main-container">
+        <div class="header-section">
+            <div class="header-text">
+                <h1>Presensi Kehadiran</h1>
+                <p>Pantau jam masuk, keluar, dan durasi kerja staf secara real-time.</p>
             </div>
+            <button class="btn-primary" onclick="document.getElementById('modalAbsen').style.display='flex'">
+                <i class="fas fa-fingerprint"></i> Input Kehadiran
+            </button>
+        </div>
 
-            <form action="" method="GET" style="display: flex; gap: 10px; align-items: center;">
-                <label>Filter Tanggal:</label>
-                <input type="date" name="filter_tgl" value="<?= $filter_tgl; ?>"
-                    style="padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
-                <button type="submit" class="btn-edit"
-                    style="background-color: #059212; color: white; padding: 10px 15px;">Cari</button>
+        <div class="filter-card">
+            <form action="" method="GET" class="filter-form">
+                <div class="input-with-icon">
+                    <i class="fas fa-calendar-day"></i>
+                    <input type="date" name="filter_tgl" value="<?= $filter_tgl; ?>">
+                </div>
+                <button type="submit" class="btn-search">
+                    <i class="fas fa-search"></i> Cari Data
+                </button>
                 <?php if ($filter_tgl != ''): ?>
-                    <a href="absensi.php" class="btn-hapus" style="text-decoration: none; padding: 10px 15px;">Reset</a>
+                    <a href="absensi.php" class="btn-reset">
+                        <i class="fas fa-sync"></i> Reset
+                    </a>
                 <?php endif; ?>
             </form>
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Tanggal</th>
-                    <th>Nama Pegawai</th>
-                    <th>Jam Masuk</th>
-                    <th>Jam Keluar</th>
-                    <th>Status</th>
-                    <th>Lama Bekerja</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                // Logika SQL Filter
-                if ($filter_tgl != '') {
-                    $sql = "SELECT absensi.*, pegawai.nama FROM absensi 
-                            JOIN pegawai ON absensi.id_pegawai = pegawai.id_pegawai 
-                            WHERE absensi.tanggal = '$filter_tgl'
-                            ORDER BY absensi.id_absensi DESC";
-                } else {
-                    $sql = "SELECT absensi.*, pegawai.nama FROM absensi 
-                            JOIN pegawai ON absensi.id_pegawai = pegawai.id_pegawai 
-                            ORDER BY absensi.tanggal DESC, absensi.id_absensi DESC";
-                }
-
-                $query = mysqli_query($conn, $sql);
-
-                if (mysqli_num_rows($query) > 0) {
-                    while ($row = mysqli_fetch_assoc($query)):
-                        ?>
+        <div class="card table-card">
+            <div class="table-responsive">
+                <table>
+                    <thead>
                         <tr>
-                            <td><?= date('d/m/Y', strtotime($row['tanggal'])); ?></td>
-                            <td><?= $row['nama']; ?></td>
-                            <td style="<?= $row['status'] != 'Hadir' ? 'color: red; font-style: italic;' : ''; ?>">
-                                <?= $row['jam_masuk'] ?: 'Kosong'; ?>
-                            </td>
-                            <td style="<?= $row['status'] != 'Hadir' ? 'color: red; font-style: italic;' : ''; ?>">
-                                <?= $row['jam_keluar'] ?: 'Kosong'; ?>
-                            </td>
-                            <td>
-                                <span
-                                    class="badge badge-<?= strtolower($row['status'] == 'Izin/Cuti' ? 'izin' : $row['status']); ?>">
-                                    <?= $row['status']; ?>
-                                </span>
-                            </td>
-                            <td>
-                                <strong><?= ($row['status'] == 'Hadir') ? hitungDurasi($row['jam_masuk'], $row['jam_keluar']) : '-'; ?></strong>
-                            </td>
-                            <td>
-                                <?php if ($row['status'] == 'Hadir' && empty($row['jam_keluar'])): ?>
-                                    <a href="absensi_proses.php?absen_keluar=<?= $row['id_absensi']; ?>" class="btn-edit"
-                                        style="background-color: #06D001; color:white;">
-                                        Klik Jam Keluar
-                                    </a>
-                                <?php else: ?>
-                                    <small>-</small>
-                                <?php endif; ?>
-                            </td>
+                            <th>Tanggal</th>
+                            <th>Pegawai</th>
+                            <th class="text-center">Jam Masuk</th>
+                            <th class="text-center">Jam Keluar</th>
+                            <th>Status</th>
+                            <th>Durasi Kerja</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
-                    <?php
-                    endwhile;
-                } else {
-                    echo "<tr><td colspan='7' style='padding: 20px;'>Tidak ada data absensi untuk tanggal ini.</td></tr>";
-                }
-                ?>
-            </tbody>
-        </table>
-    </div>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $sql = ($filter_tgl != '')
+                            ? "SELECT absensi.*, pegawai.nama FROM absensi JOIN pegawai ON absensi.id_pegawai = pegawai.id_pegawai WHERE absensi.tanggal = '$filter_tgl' ORDER BY absensi.id_absensi DESC"
+                            : "SELECT absensi.*, pegawai.nama FROM absensi JOIN pegawai ON absensi.id_pegawai = pegawai.id_pegawai ORDER BY absensi.tanggal DESC, absensi.id_absensi DESC";
+
+                        $query = mysqli_query($conn, $sql);
+                        if (mysqli_num_rows($query) > 0):
+                            while ($row = mysqli_fetch_assoc($query)):
+                                $status_class = strtolower($row['status'] == 'Izin/Cuti' ? 'izin' : $row['status']);
+                                ?>
+                                <tr>
+                                    <td class="font-medium">
+                                        <?= date('d M Y', strtotime($row['tanggal'])); ?>
+                                    </td>
+                                    <td class="font-bold">
+                                        <?= $row['nama']; ?>
+                                    </td>
+                                    <td class="text-center time-cell <?= !$row['jam_masuk'] ? 'empty' : '' ?>">
+                                        <?= $row['jam_masuk'] ?: '--:--'; ?>
+                                    </td>
+                                    <td class="text-center time-cell <?= !$row['jam_keluar'] ? 'empty' : '' ?>">
+                                        <?= $row['jam_keluar'] ?: '--:--'; ?>
+                                    </td>
+                                    <td>
+                                        <span class="badge-status badge-<?= $status_class; ?>">
+                                            <?= $row['status']; ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="duration-box">
+                                            <i class="far fa-clock"></i>
+                                            <?= ($row['status'] == 'Hadir') ? hitungDurasi($row['jam_masuk'], $row['jam_keluar']) : '-'; ?>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <?php if ($row['status'] == 'Hadir' && empty($row['jam_keluar'])): ?>
+                                            <a href="absensi_proses.php?absen_keluar=<?= $row['id_absensi']; ?>"
+                                                class="btn-checkout">
+                                                Absen Keluar
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted"><i class="fas fa-check-double"></i> Selesai</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endwhile; else: ?>
+                            <tr>
+                                <td colspan="7" class="empty-state">
+                                    <i class="fas fa-folder-open"></i>
+                                    <p>Tidak ada data kehadiran ditemukan.</p>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
 
     <div id="modalAbsen" class="modal">
         <div class="modal-content">
-            <h3>Input Kehadiran</h3>
-            <form action="absensi_proses.php" method="POST">
-                <div class="form-group">
-                    <label>Pilih Pegawai</label>
-                    <select name="id_pegawai" required>
-                        <option value="">-- Pilih Pegawai --</option>
-                        <?php while ($p = mysqli_fetch_assoc($pegawai_list)): ?>
-                            <option value="<?= $p['id_pegawai']; ?>"><?= $p['nama']; ?></option>
+            <div class="modal-header">
+                <h3>Input Kehadiran Baru</h3>
+                <span class="close-modal"
+                    onclick="document.getElementById('modalAbsen').style.display='none'">&times;</span>
+            </div>
+            <form action="absensi_proses.php" method="POST" class="p-24">
+                <div class="form-group mb-20">
+                    <label>Nama Pegawai</label>
+                    <select name="id_pegawai" class="custom-select" required>
+                        <option value="">Cari Nama Pegawai...</option>
+                        <?php mysqli_data_seek($pegawai_list, 0);
+                        while ($p = mysqli_fetch_assoc($pegawai_list)): ?>
+                            <option value="<?= $p['id_pegawai']; ?>">
+                                <?= $p['nama']; ?>
+                            </option>
                         <?php endwhile; ?>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group mb-20">
                     <label>Status Kehadiran</label>
-                    <select name="status">
-                        <option value="Hadir">Hadir (Jam otomatis)</option>
-                        <option value="Alpa">Alpa</option>
-                        <option value="Izin/Cuti">Izin/Cuti</option>
-                    </select>
+                    <div class="status-options">
+                        <label class="status-radio">
+                            <input type="radio" name="status" value="Hadir" checked>
+                            <span class="radio-card"><i class="fas fa-check-circle"></i> Hadir</span>
+                        </label>
+                        <label class="status-radio">
+                            <input type="radio" name="status" value="Alpa">
+                            <span class="radio-card"><i class="fas fa-times-circle"></i> Alpa</span>
+                        </label>
+                        <label class="status-radio">
+                            <input type="radio" name="status" value="Izin/Cuti">
+                            <span class="radio-card"><i class="fas fa-envelope"></i> Izin</span>
+                        </label>
+                    </div>
                 </div>
-                <button type="submit" name="simpan_masuk" class="btn-tambah" style="width:100%">Simpan Data</button>
-                <button type="button" onclick="document.getElementById('modalAbsen').style.display='none'"
-                    style="width:100%; background:#ccc; border:none; padding:10px; border-radius:5px; margin-top:10px; cursor:pointer;">Batal</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary"
+                        onclick="document.getElementById('modalAbsen').style.display='none'">Batal</button>
+                    <button type="submit" name="simpan_masuk" class="btn-primary">Konfirmasi Kehadiran</button>
+                </div>
             </form>
         </div>
     </div>
